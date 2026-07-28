@@ -1,4 +1,3 @@
-app/
-    layout.tsx
-    page.tsx
-    globals.css
+ layout.tsx
+ page.tsx
+ globals.css
