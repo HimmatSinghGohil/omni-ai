@@ -2,48 +2,24 @@
   "name": "omni-ai",
   "version": "1.0.0",
   "private": true,
-  "description": "A unified platform consolidating AI tools into a single dashboard",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "lint": "next lint"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
-    "@supabase/supabase-js": "^2.56.0",
-    "axios": "^1.11.0",
-    "bcryptjs": "^3.0.2",
-    "clsx": "^2.1.1",
-    "framer-motion": "^12.23.12",
-    "jsonwebtoken": "^9.0.2",
-    "next": "^14.2.30",
-    "next-auth": "^4.24.11",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-hot-toast": "^2.5.2",
-    "redis": "^4.7.0",
-    "swr": "^2.3.6",
-    "zod": "^3.25.76",
-    "zustand": "^5.0.7"
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/node": "^22.17.1",
-    "@types/react": "^18.3.23",
-    "@types/react-dom": "^18.3.7",
-    "autoprefixer": "^10.4.21",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "^14.2.30",
-    "postcss": "^8.5.6",
-    "prisma": "^5.22.0",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.9.2"
-  },
-  "engines": {
-    "node": ">=18.18.0"
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.3.0",
+    "tailwindcss": "^3.3.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0"
   }
 }
