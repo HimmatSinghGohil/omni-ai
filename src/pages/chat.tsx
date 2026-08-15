@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useState } from 'react';
 
+type Message = { role: 'user' | 'assistant'; content: string };
+
 export default function ChatPage() {
   const [token, setToken] = useState<string | null>(null);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,8 +31,9 @@ export default function ChatPage() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error || `AI request failed (${response.status})`);
-      const answer = data?.output ?? data?.response ?? data?.message ?? JSON.stringify(data);
-      setMessages(prev => [...prev, { role: 'assistant', content: String(answer) }]);
+      const answer = data?.data?.result ?? data?.output ?? data?.response ?? data?.message;
+      if (typeof answer !== 'string' || !answer.trim()) throw new Error('AI returned an empty response');
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'AI request failed');
     } finally {
@@ -52,7 +55,7 @@ export default function ChatPage() {
       <section className="mx-auto flex min-h-[calc(100vh-73px)] max-w-4xl flex-col p-4">
         <div className="flex-1 space-y-4 overflow-y-auto py-6">
           {messages.length === 0 && <div className="rounded-2xl border border-slate-800 p-8 text-center text-slate-400">Ask OMNI-AI anything.</div>}
-          {messages.map((message, index) => <div key={index} className={`rounded-2xl p-4 ${message.role === 'user' ? 'ml-8 bg-blue-700' : 'mr-8 bg-slate-900 border border-slate-800'}`}><div className="mb-1 text-xs uppercase text-slate-300">{message.role}</div><div className="whitespace-pre-wrap">{message.content}</div></div>)}
+          {messages.map((message, index) => <div key={index} className={`rounded-2xl p-4 ${message.role === 'user' ? 'ml-8 bg-blue-700' : 'mr-8 border border-slate-800 bg-slate-900'}`}><div className="mb-1 text-xs uppercase text-slate-300">{message.role === 'user' ? 'You' : 'OMNI-AI'}</div><div className="whitespace-pre-wrap">{message.content}</div></div>)}
           {loading && <div className="mr-8 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-slate-400">Thinking…</div>}
         </div>
         {error && <div className="mb-3 rounded-lg bg-red-950 p-3 text-sm text-red-300">{error}</div>}
