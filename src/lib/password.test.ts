@@ -1,0 +1,10 @@
+import { hashPassword, verifyPassword } from './password';
+
+describe('password helpers', () => {
+  it('hashes and verifies a password', async () => {
+    const hash = await hashPassword('correct horse battery staple');
+    expect(hash).not.toBe('correct horse battery staple');
+    await expect(verifyPassword('correct horse battery staple', hash)).resolves.toBe(true);
+    await expect(verifyPassword('wrong password', hash)).resolves.toBe(false);
+  });
+});
