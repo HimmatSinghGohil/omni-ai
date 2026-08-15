@@ -7,10 +7,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { USER ADMIN }
-enum Provider { OPENAI ANTHROPIC GOOGLE GROQ MISTRAL XAI OPENROUTER }
-enum SubscriptionPlan { FREE PRO ENTERPRISE }
-enum TaskStatus { TODO IN_PROGRESS DONE ARCHIVED }
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Provider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  GROQ
+  MISTRAL
+  XAI
+  OPENROUTER
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  ARCHIVED
+}
 
 model User {
   id            String           @id @default(cuid())
