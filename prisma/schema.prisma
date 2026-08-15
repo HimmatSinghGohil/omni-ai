@@ -121,6 +121,7 @@ model CreditLedger {
   id        String   @id @default(cuid())
   amount    Int
   reason    String
+  provider  Provider?
   createdAt DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
