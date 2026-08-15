@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 async function readApiResponse(response: Response) {
   const text = await response.text();
   try {
-    return JSON.parse(text) as { error?: string; success?: boolean };
+    return JSON.parse(text) as { error?: string; success?: boolean; token?: string };
   } catch {
     throw new Error(`Authentication API returned HTTP ${response.status} instead of JSON`);
   }
@@ -28,6 +28,8 @@ export default function Login() {
       });
       const data = await readApiResponse(response);
       if (!response.ok) throw new Error(data.error || `Login failed (${response.status})`);
+      if (!data.token) throw new Error('Login succeeded but no authentication token was returned');
+      localStorage.setItem('omni_ai_token', data.token);
       window.location.href = '/chat';
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Login failed');
