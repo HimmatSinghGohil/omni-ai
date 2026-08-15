@@ -2,8 +2,21 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/db';
 import { orchestrateRequest } from '@/lib/orchestrator';
 import { verifyToken } from '@/lib/auth';
+import { Provider } from '@prisma/client';
 
 const CHAT_CREDIT_COST = 1;
+
+function toPrismaProvider(value: string): Provider {
+  const normalized = value.toLowerCase();
+  if (normalized === 'groq') return Provider.GROQ;
+  if (normalized === 'gemini' || normalized === 'google') return Provider.GOOGLE;
+  if (normalized === 'openai') return Provider.OPENAI;
+  if (normalized === 'anthropic') return Provider.ANTHROPIC;
+  if (normalized === 'mistral') return Provider.MISTRAL;
+  if (normalized === 'xai') return Provider.XAI;
+  if (normalized === 'openrouter') return Provider.OPENROUTER;
+  throw new Error(`Unsupported provider: ${value}`);
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -22,7 +35,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!input) return res.status(400).json({ success: false, error: 'input is required' });
   if (input.length > 20000) return res.status(400).json({ success: false, error: 'input is too long' });
 
-  // Atomically reserve one credit so concurrent requests cannot overspend the balance.
   const reserved = await prisma.user.updateMany({
     where: { id: user.userId, credits: { gte: CHAT_CREDIT_COST } },
     data: { credits: { decrement: CHAT_CREDIT_COST } },
@@ -45,6 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { id: user.userId },
       data: { credits: { increment: CHAT_CREDIT_COST } },
     });
+    console.error('AI orchestration failed:', error);
     return res.status(500).json({ success: false, error: 'AI request failed' });
   }
 
@@ -56,29 +69,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(502).json(result);
   }
 
-  const provider = result.data.provider;
+  const provider = toPrismaProvider(result.data.provider);
   const model = result.data.model;
 
-  await prisma.$transaction([
-    prisma.creditLedger.create({
-      data: {
-        userId: user.userId,
-        amount: -CHAT_CREDIT_COST,
-        reason: `AI chat (${provider}/${model})`,
-      },
-    }),
-    prisma.usage.create({
-      data: {
-        userId: user.userId,
-        provider,
-        model,
-        requests: 1,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalCost: 0,
-      },
-    }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.creditLedger.create({
+        data: {
+          userId: user.userId,
+          amount: -CHAT_CREDIT_COST,
+          reason: `AI chat (${result.data.provider}/${model})`,
+          provider,
+        },
+      }),
+      prisma.usage.create({
+        data: {
+          userId: user.userId,
+          provider,
+          model,
+          requests: 1,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalCost: 0,
+        },
+      }),
+    ]);
+  } catch (error) {
+    // The credit was already reserved; refund it if accounting persistence fails.
+    await prisma.user.update({
+      where: { id: user.userId },
+      data: { credits: { increment: CHAT_CREDIT_COST } },
+    });
+    console.error('Usage/credit ledger persistence failed:', error);
+    return res.status(500).json({ success: false, error: 'Failed to record AI usage' });
+  }
 
   const currentUser = await prisma.user.findUnique({
     where: { id: user.userId },
