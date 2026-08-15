@@ -28,7 +28,7 @@ jobs:
       - name: Validate Prisma schema
         run: npx prisma validate
         env:
-          DATABASE_URL: postgresql://user:password@localhost:5432/omni_ai?schema=public
+          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/omni_ai_ci?schema=public
 
       - name: Generate Prisma Client
         run: npx prisma generate
