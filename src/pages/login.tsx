@@ -1,6 +1,15 @@
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 
+async function readApiResponse(response: Response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as { error?: string; success?: boolean };
+  } catch {
+    throw new Error(`Authentication API returned HTTP ${response.status} instead of JSON`);
+  }
+}
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,11 +23,11 @@ export default function Login() {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Login failed');
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || `Login failed (${response.status})`);
       window.location.href = '/chat';
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Login failed');
