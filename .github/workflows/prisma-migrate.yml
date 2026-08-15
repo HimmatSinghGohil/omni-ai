@@ -34,6 +34,15 @@ jobs:
       - name: Validate Prisma schema
         run: npx prisma validate
         env:
+          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/omni_ai_ci?schema=public
+
+      - name: Check production database secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL GitHub Secret is missing or empty."
+            exit 1
+          fi
+        env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Apply production migrations
