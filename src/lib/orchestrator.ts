@@ -7,12 +7,7 @@ export type ToolType =
   | 'translator'
   | 'resume-builder';
 
-export type OrchestratorRequest = {
-  userId: string;
-  toolType: ToolType;
-  input: string;
-  model?: string;
-};
+export type OrchestratorRequest = { userId: string; toolType: ToolType; input: string; model?: string };
 
 const systemPrompts: Record<ToolType, string> = {
   chat: 'You are Omni AI, a helpful general-purpose assistant.',
@@ -32,117 +27,47 @@ function cleanError(value: unknown) {
 async function callGroq(input: string, system: string, model?: string) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY is not configured');
-
   const selectedModel = model || process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: selectedModel,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: input },
-      ],
-    }),
+    method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: selectedModel, messages: [{ role: 'system', content: system }, { role: 'user', content: input }] }),
   });
-
   const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = data?.error?.message || `Groq request failed (${response.status})`;
-    throw new Error(message);
-  }
-
+  if (!response.ok) throw new Error(data?.error?.message || `Groq request failed (${response.status})`);
   const result = data?.choices?.[0]?.message?.content;
   if (!result) throw new Error('Groq returned an empty response');
-
-  return {
-    result: String(result),
-    model: selectedModel,
-    responseId: data?.id,
-    provider: 'groq' as const,
-  };
+  return { result: String(result), model: selectedModel, responseId: data?.id, provider: 'groq' as const };
 }
 
 async function callGemini(input: string, system: string, model?: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
-
   const selectedModel = model || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent`;
-
   const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'x-goog-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: input }] }],
-    }),
+    method: 'POST', headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ system_instruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: input }] }] }),
   });
-
   const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = data?.error?.message || `Gemini request failed (${response.status})`;
-    throw new Error(message);
-  }
-
-  const result = data?.candidates?.[0]?.content?.parts
-    ?.map((part: { text?: string }) => part.text || '')
-    .join('')
-    .trim();
+  if (!response.ok) throw new Error(data?.error?.message || `Gemini request failed (${response.status})`);
+  const result = data?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('').trim();
   if (!result) throw new Error('Gemini returned an empty response');
-
-  return {
-    result,
-    model: selectedModel,
-    responseId: data?.responseId,
-    provider: 'gemini' as const,
-  };
+  // The Prisma Provider enum represents Google's Gemini API as GOOGLE.
+  return { result, model: selectedModel, responseId: data?.responseId, provider: 'google' as const };
 }
 
 export async function orchestrateRequest(request: OrchestratorRequest) {
-  if (!request.input?.trim()) {
-    return { success: false, error: 'Input is required' };
-  }
-
+  if (!request.input?.trim()) return { success: false, error: 'Input is required' };
   const system = systemPrompts[request.toolType];
   let groqError = '';
-
-  // Primary provider: Groq. It exposes an OpenAI-compatible chat API.
   try {
     const response = await callGroq(request.input, system, request.model);
-    return {
-      success: true,
-      data: {
-        toolType: request.toolType,
-        ...response,
-      },
-    };
-  } catch (error) {
-    groqError = cleanError(error);
-  }
-
-  // Fallback provider: Gemini. Keep the provider failure private unless both providers fail.
+    return { success: true, data: { toolType: request.toolType, ...response } };
+  } catch (error) { groqError = cleanError(error); }
   try {
     const response = await callGemini(request.input, system, request.model);
-    return {
-      success: true,
-      data: {
-        toolType: request.toolType,
-        ...response,
-        fallback: true,
-      },
-    };
+    return { success: true, data: { toolType: request.toolType, ...response, fallback: true } };
   } catch (error) {
-    const geminiError = cleanError(error);
-    return {
-      success: false,
-      error: `AI providers unavailable. Groq: ${groqError}. Gemini: ${geminiError}`,
-    };
+    return { success: false, error: `AI providers unavailable. Groq: ${groqError}. Gemini: ${cleanError(error)}` };
   }
 }
