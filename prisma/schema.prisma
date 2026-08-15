@@ -7,137 +7,99 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-
-enum Provider {
-  OPENAI
-  ANTHROPIC
-  GOOGLE
-  GROQ
-  MISTRAL
-  XAI
-  OPENROUTER
-}
-
-enum SubscriptionPlan {
-  FREE
-  PRO
-  ENTERPRISE
-}
-
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  DONE
-  ARCHIVED
-}
+enum Role { USER ADMIN }
+enum Provider { OPENAI ANTHROPIC GOOGLE GROQ MISTRAL XAI OPENROUTER }
+enum SubscriptionPlan { FREE PRO ENTERPRISE }
+enum TaskStatus { TODO IN_PROGRESS DONE ARCHIVED }
 
 model User {
-  id            String             @id @default(cuid())
+  id            String           @id @default(cuid())
   name          String?
-  email         String             @unique
+  email         String           @unique
   passwordHash  String?
   avatar        String?
-  role          Role               @default(USER)
-  plan          SubscriptionPlan   @default(FREE)
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
+  role          Role             @default(USER)
+  plan          SubscriptionPlan @default(FREE)
+  credits       Int              @default(100)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
   apiKeys       ApiKey[]
   conversations Conversation[]
   tasks         Task[]
   usage         Usage[]
+  creditLedger  CreditLedger[]
 }
 
 model ApiKey {
-  id          String   @id @default(cuid())
-  provider    Provider
+  id           String   @id @default(cuid())
+  provider     Provider
   encryptedKey String
-  active      Boolean @default(true)
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  userId      String
-  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
 }
 
 model Conversation {
-  id          String   @id @default(cuid())
-  title       String
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  userId      String
-  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  messages    Message[]
-
+  id        String    @id @default(cuid())
+  title     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
   @@index([userId])
 }
 
 model Message {
-  id              String @id @default(cuid())
-  role            String
-  content         String @db.Text
-  model           String?
-  provider        Provider?
-
-  promptTokens    Int?
+  id               String       @id @default(cuid())
+  role             String
+  content          String       @db.Text
+  model            String?
+  provider         Provider?
+  promptTokens     Int?
   completionTokens Int?
-
-  createdAt       DateTime @default(now())
-
-  conversationId  String
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
+  createdAt        DateTime     @default(now())
+  conversationId   String
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   @@index([conversationId])
 }
 
 model Task {
-  id          String @id @default(cuid())
+  id          String     @id @default(cuid())
   title       String
-  description String? @db.Text
+  description String?    @db.Text
   status      TaskStatus @default(TODO)
-
   dueDate     DateTime?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   userId      String
-  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
 }
 
 model Usage {
-  id            String @id @default(cuid())
+  id               String   @id @default(cuid())
+  provider         Provider
+  model            String
+  requests         Int      @default(0)
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalCost        Decimal  @default(0)
+  createdAt        DateTime @default(now())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
 
-  provider      Provider
-
-  model         String
-
-  requests      Int @default(0)
-
-  promptTokens  Int @default(0)
-
-  completionTokens Int @default(0)
-
-  totalCost     Decimal @default(0)
-
-  createdAt     DateTime @default(now())
-
-  userId         String
-
-  user           User @relation(fields:[userId], references:[id], onDelete: Cascade)
-
-  @@index([userId])
+model CreditLedger {
+  id        String   @id @default(cuid())
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
 }
