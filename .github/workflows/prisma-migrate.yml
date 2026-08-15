@@ -45,18 +45,13 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Recover failed initial migration if present
+      - name: Recover known failed initial migration
         shell: bash
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
-          if npx prisma migrate status 2>&1 | grep -q "20260815000100_add_credits"; then
-            echo "Attempting to recover failed initial migration..."
-            npx prisma migrate resolve --rolled-back 20260815000100_add_credits
-          else
-            echo "No failed initial migration detected."
-          fi
+          npx prisma migrate resolve --rolled-back 20260815000100_add_credits || true
 
       - name: Apply production migrations
         run: npx prisma migrate deploy
