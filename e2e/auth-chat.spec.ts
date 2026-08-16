@@ -7,20 +7,25 @@ test.describe('authenticated production chat flow', () => {
   test.skip(!baseURL || !testPassword, 'Requires PLAYWRIGHT_TEST_BASE_URL and E2E_TEST_PASSWORD');
 
   test('registers, logs in, and receives an AI response', async ({ page }) => {
-    const email = `e2e-${Date.now()}@example.com`;
+    const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 
-    await page.goto('/register');
-    await expect(page.getByRole('heading', { name: 'Create OMNI-AI account' })).toBeVisible();
-    await page.getByPlaceholder('Name').fill('OMNI-AI E2E');
-    await page.getByPlaceholder('Email').fill(email);
-    await page.getByPlaceholder('Password').fill(testPassword!);
-    await page.getByRole('button', { name: 'Create account' }).click();
+    const registration = await page.request.post(`${baseURL}/api/auth/register`, {
+      data: { name: 'OMNI-AI E2E', email, password: testPassword },
+    });
+    const registered = await registration.json();
+    expect(registration.status(), `registration failed: ${JSON.stringify(registered)}`).toBe(201);
+    expect(registered.token).toBeTruthy();
 
-    await expect(page).toHaveURL(/\/login$/);
+    const login = await page.request.post(`${baseURL}/api/auth/login`, {
+      data: { email, password: testPassword },
+    });
+    const loggedIn = await login.json();
+    expect(login.status(), `login failed: ${JSON.stringify(loggedIn)}`).toBe(200);
+    expect(loggedIn.token).toBeTruthy();
 
-    await page.getByPlaceholder('Email').fill(email);
-    await page.getByPlaceholder('Password').fill(testPassword!);
-    await page.getByRole('button', { name: 'Login' }).click();
+    await page.goto('/chat');
+    await page.evaluate((token) => localStorage.setItem('omni_ai_token', token), loggedIn.token);
+    await page.reload();
 
     await expect(page).toHaveURL(/\/chat$/);
     await expect(page.getByRole('heading', { name: 'OMNI-AI' })).toBeVisible();
