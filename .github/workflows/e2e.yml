@@ -31,7 +31,11 @@ jobs:
       - name: Run E2E tests
         run: npm run test:e2e
         env:
-          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url || vars.PLAYWRIGHT_TEST_BASE_URL }}
+          # deployment_status supplies the Vercel deployment URL automatically.
+          # workflow_dispatch falls back to the configured repository variable,
+          # then to the stable production domain so the smoke tests never receive
+          # an empty PLAYWRIGHT_TEST_BASE_URL.
+          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url || vars.PLAYWRIGHT_TEST_BASE_URL || 'https://omni-ai-eta-ten.vercel.app' }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
