@@ -32,6 +32,8 @@ jobs:
         run: npm run test:e2e
         env:
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url || vars.PLAYWRIGHT_TEST_BASE_URL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
