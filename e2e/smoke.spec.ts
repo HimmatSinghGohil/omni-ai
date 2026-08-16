@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
-import { hashPassword } from '../src/lib/password';
 
 const prisma = new PrismaClient();
 const password = process.env.E2E_TEST_PASSWORD;
@@ -10,27 +9,18 @@ function requireE2EPassword() {
   return password as string;
 }
 
-async function createE2EUser(prefix: string) {
+async function registerE2EUser(baseURL: string, prefix: string) {
   const email = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const user = await prisma.user.create({
-    data: {
-      name: 'E2E Test User',
-      email,
-      passwordHash: await hashPassword(requireE2EPassword()),
-      credits: 100,
-    },
-    select: { id: true, email: true, credits: true },
-  });
-  return user;
-}
-
-async function login(baseURL: string, email: string) {
-  const response = await fetch(`${baseURL}/api/auth/login`, {
+  const response = await fetch(`${baseURL}/api/auth/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: requireE2EPassword() }),
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ name: 'E2E Test User', email, password: requireE2EPassword() }),
   });
-  return response;
+  const body = await response.json().catch(() => ({}));
+  expect(response.status, `registration failed: ${JSON.stringify(body)}`).toBe(201);
+  expect(body.token).toBeTruthy();
+  expect(body.user?.id).toBeTruthy();
+  return { email, userId: body.user.id as string, token: body.token as string };
 }
 
 test.afterAll(async () => {
@@ -53,20 +43,15 @@ test('authenticated chat deducts one credit and records usage/ledger', async ({ 
   const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL;
   expect(baseURL).toBeTruthy();
 
-  const created = await createE2EUser('e2e-credit');
+  const created = await registerE2EUser(baseURL as string, 'e2e-credit');
   try {
-    const loginResponse = await login(baseURL as string, created.email);
-    expect(loginResponse.status).toBe(200);
-    const loggedIn = await loginResponse.json();
-    const token = loggedIn.token as string;
-    expect(token).toBeTruthy();
-    expect(loggedIn.user.credits).toBe(100);
+    expect(created.token).toBeTruthy();
 
-    const before = await prisma.user.findUnique({ where: { id: created.id }, select: { credits: true } });
+    const before = await prisma.user.findUnique({ where: { id: created.userId }, select: { credits: true } });
     expect(before?.credits).toBe(100);
 
     const chat = await request.post(`${baseURL}/api/ai/chat`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${created.token}` },
       data: { input: 'E2E credit accounting test' },
     });
     expect(chat.status()).toBe(200);
@@ -75,20 +60,20 @@ test('authenticated chat deducts one credit and records usage/ledger', async ({ 
     expect(chatBody.data?.result).toBeTruthy();
     expect(chatBody.data?.creditsRemaining).toBe(99);
 
-    const after = await prisma.user.findUnique({ where: { id: created.id }, select: { credits: true } });
+    const after = await prisma.user.findUnique({ where: { id: created.userId }, select: { credits: true } });
     expect(after?.credits).toBe(99);
 
-    const usage = await prisma.usage.findMany({ where: { userId: created.id }, orderBy: { createdAt: 'desc' } });
+    const usage = await prisma.usage.findMany({ where: { userId: created.userId }, orderBy: { createdAt: 'desc' } });
     expect(usage.length).toBeGreaterThanOrEqual(1);
     expect(usage[0].requests).toBe(1);
     expect(['GROQ', 'GOOGLE', 'OPENAI']).toContain(usage[0].provider);
 
-    const ledger = await prisma.creditLedger.findMany({ where: { userId: created.id }, orderBy: { createdAt: 'desc' } });
+    const ledger = await prisma.creditLedger.findMany({ where: { userId: created.userId }, orderBy: { createdAt: 'desc' } });
     expect(ledger.length).toBeGreaterThanOrEqual(1);
     expect(ledger[0].amount).toBe(-1);
     expect(ledger[0].provider).toBe(usage[0].provider);
   } finally {
-    await prisma.user.delete({ where: { id: created.id } }).catch(() => undefined);
+    await prisma.user.delete({ where: { id: created.userId } }).catch(() => undefined);
   }
 });
 
@@ -96,21 +81,13 @@ test('chat rate limit returns 429 without consuming credits', async ({ request }
   const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL;
   expect(baseURL).toBeTruthy();
 
-  const created = await createE2EUser('e2e-rate');
+  const created = await registerE2EUser(baseURL as string, 'e2e-rate');
   try {
-    const loginResponse = await login(baseURL as string, created.email);
-    expect(loginResponse.status).toBe(200);
-    const loggedIn = await loginResponse.json();
-    const token = loggedIn.token as string;
-    expect(token).toBeTruthy();
-
-    // The limiter runs before input validation, so invalid requests exercise Redis
-    // without calling an AI provider or consuming credits.
     let lastStatus = 0;
     let rateLimited = false;
     for (let i = 0; i < 31; i += 1) {
       const response = await request.post(`${baseURL}/api/ai/chat`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${created.token}` },
         data: { input: '' },
       });
       lastStatus = response.status();
@@ -126,9 +103,9 @@ test('chat rate limit returns 429 without consuming credits', async ({ request }
     expect(rateLimited).toBeTruthy();
     expect(lastStatus).toBe(429);
 
-    const user = await prisma.user.findUnique({ where: { id: created.id }, select: { credits: true } });
+    const user = await prisma.user.findUnique({ where: { id: created.userId }, select: { credits: true } });
     expect(user?.credits).toBe(100);
   } finally {
-    await prisma.user.delete({ where: { id: created.id } }).catch(() => undefined);
+    await prisma.user.delete({ where: { id: created.userId } }).catch(() => undefined);
   }
 });
