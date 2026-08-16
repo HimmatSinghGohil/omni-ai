@@ -2,9 +2,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/db';
 import { orchestrateRequest } from '@/lib/orchestrator';
 import { verifyToken } from '@/lib/auth';
+import { rateLimit } from '@/lib/rate-limit';
 import { Provider } from '@prisma/client';
 
 const CHAT_CREDIT_COST = 1;
+const CHAT_RATE_LIMIT = 30;
+const CHAT_RATE_WINDOW_SECONDS = 60;
 
 function toPrismaProvider(value: string): Provider {
   const normalized = value.toLowerCase();
@@ -30,6 +33,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const user = await verifyToken(token);
   if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+
+  const limit = await rateLimit(
+    `chat:user:${user.userId}`,
+    CHAT_RATE_LIMIT,
+    CHAT_RATE_WINDOW_SECONDS,
+  );
+
+  res.setHeader('X-RateLimit-Limit', CHAT_RATE_LIMIT.toString());
+  res.setHeader('X-RateLimit-Remaining', limit.remaining.toString());
+
+  if (!limit.success) {
+    res.setHeader('Retry-After', CHAT_RATE_WINDOW_SECONDS.toString());
+    return res.status(429).json({
+      success: false,
+      error: 'Too many AI requests. Please try again in a minute.',
+    });
+  }
 
   const input = typeof req.body?.input === 'string' ? req.body.input.trim() : '';
   if (!input) return res.status(400).json({ success: false, error: 'input is required' });
@@ -95,7 +115,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }),
     ]);
   } catch (error) {
-    // The credit was already reserved; refund it if accounting persistence fails.
     await prisma.user.update({
       where: { id: user.userId },
       data: { credits: { increment: CHAT_CREDIT_COST } },
